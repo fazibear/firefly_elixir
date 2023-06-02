@@ -33,7 +33,7 @@ defmodule Firefly.MixProject do
       maintainers: ["Michał Kalbarczyk"],
       licenses: ["MIT"],
       links: %{
-        GitHub: "https://github.com/fazibear/firefly-elixir",
+        GitHub: "https://github.com/fazibear/firefly_elixir",
       }
     ]
   end

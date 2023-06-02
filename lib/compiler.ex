@@ -10,16 +10,9 @@ defmodule Mix.Tasks.Compile.Firefly do
 
     Mix.Task.run("compile.protocols", args)
 
-    beams =
-      Mix.Project.build_path()
-      |> Path.join("lib")
-      |> Path.join(Path.basename(File.cwd!))
-      |> Path.join("**")
-      |> Path.join("*.beam")
-      |> Path.wildcard()
-
-    with {:ok, erls} <- beam_to_erl(beams, opts),
-         {:ok, _output} <- compile_with_firefly(erls, opts)
+    with {:ok, erls} <- beam_to_erl(beams(),opts),
+        {:ok, erls} <- add_erl_files(erls, opts),
+         :ok <- compile_with_firefly(erls, opts)
     do
       :ok
     else
@@ -33,12 +26,21 @@ defmodule Mix.Tasks.Compile.Firefly do
     |> File.rm_rf()
   end
 
+  defp add_erl_files(erls, _opts) do
+    {
+      :ok,
+      erls
+      |> Firefly.InitErl.add(dest_dir())
+      |> Firefly.ErlangErl.add(dest_dir())
+    }
+  end
+
   defp compile_with_firefly(erls, opts) do
     args = ["compile" | erls]
     if opts[:verbose], do: args = ["-v" | args]
 
     System.cmd("firefly", args)
-    {:ok, "TODO"}
+    :ok
   end
 
   defp beam_to_erl(beams, opts) do
@@ -107,13 +109,11 @@ defmodule Mix.Tasks.Compile.Firefly do
 
   defp extract_targets(beams, opts) do
     for beam <- beams do
-      app = app_name_from_path(beam)
       module = module_name_from_path(beam)
-      dest_dir = Path.join([Mix.Project.build_path(), "firefly", app, "src"])
-      target = Path.join(dest_dir, module <> ".erl")
+      target = Path.join(dest_dir(), module <> ".erl")
 
       # Ensure target dir exists
-      :ok = File.mkdir_p!(dest_dir)
+      :ok = File.mkdir_p!(dest_dir())
 
       if opts[:force] || Mix.Utils.stale?([beam], [target]) do
         {:stale, beam, target}
@@ -123,19 +123,37 @@ defmodule Mix.Tasks.Compile.Firefly do
     end
   end
 
+  defp beams do
+    Mix.Project.build_path()
+    |> Path.join("lib")
+    |> Path.join(app_name())
+    |> Path.join("ebin")
+    |> Path.join("*.beam")
+    |> Path.wildcard()
+  end
+
+  defp protocols do
+    Mix.Project.build_path()
+    |> Path.join("lib")
+    |> Path.join(app_name())
+    |> Path.join("consolidated")
+    |> Path.join("*.beam")
+    |> Path.wildcard()
+  end
+
+  defp dest_dir do
+    Path.join([Mix.Project.build_path(), "firefly", app_name(), "src"])
+  end
+
+  defp app_name do
+    Atom.to_string(Mix.Project.config[:app])
+  end
+
   # expecting ../<app>/ebin/<module>.beam
   defp module_name_from_path(path) do
     path
     |> Path.basename()
     |> Path.rootname()
-  end
-
-  # expecting ../<app>/ebin/<module>.beam
-  defp app_name_from_path(path) do
-    path
-    |> Path.dirname()
-    |> Path.dirname()
-    |> Path.basename()
   end
 
   def manifests, do: [manifest()]
