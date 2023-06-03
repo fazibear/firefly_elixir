@@ -14,8 +14,7 @@ defmodule Firefly.InitErl do
     -module(init).
     -exports([boot/1]).
 
-    boot(Args) ->
-    '#{to_string(module)}':#{Atom.to_string(fun)}(Args).
+    boot(Args) -> '#{to_string(module)}':#{Atom.to_string(fun)}(Args).
     """
   end
 end

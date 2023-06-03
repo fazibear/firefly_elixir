@@ -3,14 +3,14 @@ defmodule Mix.Tasks.Compile.Firefly do
 
   @recursive true
   @manifest "compile.firefly"
-  @switches [force: :boolean, verbose: :boolean]
+  @switches [force: :boolean, verbose: :boolean, target: :string]
 
   def run(args) do
     {opts, _, _} = OptionParser.parse(args, switches: @switches)
 
     Mix.Task.run("compile.protocols", args)
 
-    with {:ok, erls} <- beam_to_erl(beams(),opts),
+    with {:ok, erls} <- beam_to_erl(beams(), opts),
         {:ok, erls} <- add_erl_files(erls, opts),
          :ok <- compile_with_firefly(erls, opts)
     do
@@ -36,12 +36,16 @@ defmodule Mix.Tasks.Compile.Firefly do
   end
 
   defp compile_with_firefly(erls, opts) do
-    args = ["compile" | erls]
-    if opts[:verbose], do: args = ["-v" | args]
+    args = []
+      |> add_firefly_param(opts[:verbose], "-v")
+      |> add_firefly_param(opts[:target], "-t=#{opts[:target]}")
 
-    System.cmd("firefly", args)
+    System.cmd("firefly", ["compile"] ++ args ++ erls)
     :ok
   end
+
+  defp add_firefly_param(list, false, _), do: list
+  defp add_firefly_param(list, _, item), do: list ++ [item]
 
   defp beam_to_erl(beams, opts) do
     stale = for {:stale, src, dest} <- extract_targets(beams, opts), do: {src, dest}
@@ -98,6 +102,18 @@ defmodule Mix.Tasks.Compile.Firefly do
     |> case do
       {:ok, {_mod, [abstract_code: {:raw_abstract_v1, forms}]}} ->
         {:ok, forms}
+      {:error, mod, reason} ->
+        {:error, mod.format_error(reason)}
+    end
+  end
+
+  defp extract_imports(path) do
+    path
+    |> String.to_charlist()
+    |> :beam_lib.chunks([:imports])
+    |> case do
+      {:ok, {_mod, [imports: imports]}} ->
+        {:ok, imports}
       {:error, mod, reason} ->
         {:error, mod.format_error(reason)}
     end
